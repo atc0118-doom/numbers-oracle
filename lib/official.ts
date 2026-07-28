@@ -1,51 +1,18 @@
 import type { Draw, Game } from './types';
 
-const URLS: Record<Game, string> = {
-  numbers3: 'https://www.mizuhobank.co.jp/takarakuji/check/numbers/numbers3/index.html',
-  numbers4: 'https://www.mizuhobank.co.jp/takarakuji/check/numbers/numbers4/index.html'
-};
-
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
-}
-
-function htmlToText(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-  ).replace(/\s+/g, ' ').trim();
-}
-
-export async function fetchLatest(game: Game): Promise<Draw | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  let res: Response;
-  try {
-    res = await fetch(URLS[game], {
-    headers: { 'user-agent': 'Mozilla/5.0 NumbersOracle/1.1' },
-      cache: 'no-store',
-      signal: controller.signal
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (!res.ok) throw new Error(`official fetch failed: ${res.status}`);
-
-  const text = htmlToText(await res.text());
-  const digits = game === 'numbers3' ? 3 : 4;
-  const round = text.match(/第\s*(\d+)\s*回/)?.[1];
-  const date = text.match(/抽せん日\s*(\d{4}年\d{1,2}月\d{1,2}日)/)?.[1];
-  const number = text.match(new RegExp(`抽せん数字\\s*(\\d{${digits}})`))?.[1];
-
-  if (!round || !date || !number) return null;
-  return { game, round: Number(round), date, number, source: 'official' };
-}
+const LATEST_URLS:Record<Game,string>={numbers3:'https://www.mizuhobank.co.jp/takarakuji/check/numbers/numbers3/index.html',numbers4:'https://www.mizuhobank.co.jp/takarakuji/check/numbers/numbers4/index.html'};
+const BACK_BASE='https://www.mizuhobank.co.jp/takarakuji/check/numbers/backnumber/';
+const decode=(v:string)=>v.replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&quot;/gi,'"').replace(/&#39;/gi,"'");
+const clean=(html:string)=>decode(html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<br\s*\/?\s*>/gi,'\n').replace(/<\/t[rdh]>/gi,'\t').replace(/<[^>]+>/g,' ')).replace(/[ \t]+/g,' ').replace(/\n+/g,'\n');
+async function fetchRaw(url:string){let last='';for(let attempt=0;attempt<3;attempt++){const c=new AbortController();const t=setTimeout(()=>c.abort(),12000+attempt*3000);try{const r=await fetch(url,{headers:{'user-agent':'Mozilla/5.0 (compatible; NumbersOracle/6.0)','accept-language':'ja,en;q=0.8'},cache:'no-store',signal:c.signal});if(!r.ok)throw new Error(`HTTP ${r.status}`);return await r.text();}catch(e){last=e instanceof Error?e.message:String(e);await new Promise(r=>setTimeout(r,400*(attempt+1)));}finally{clearTimeout(t)}}throw new Error(`official fetch failed: ${last}`)}
+const yen=(v?:string)=>v?Number(v.replace(/[,，円\s]/g,''))||null:null;
+function parseLatest(html:string,game:Game):Draw|null{const text=clean(html);const digits=game==='numbers3'?3:4;const patterns=[
+ new RegExp(`第\\s*(\\d+)\\s*回[\\s\\S]{0,220}?抽せん日\\s*(\\d{4}年\\d{1,2}月\\d{1,2}日)[\\s\\S]{0,160}?抽せん数字\\s*(\\d{${digits}})`),
+ new RegExp(`第\\s*(\\d+)\\s*回[\\s\\S]{0,260}?(\\d{4}年\\d{1,2}月\\d{1,2}日)[\\s\\S]{0,120}?(\\d{${digits}})`)
+];for(const re of patterns){const m=text.match(re);if(m){const after=text.slice((m.index??0), (m.index??0)+900);const sm=after.match(/ストレート\s*(?:\d+口\s*)?([\d,，]+)円/);const bm=after.match(/ボックス\s*(?:\d+口\s*)?([\d,，]+)円/);return {game,round:Number(m[1]),date:m[2],number:m[3],source:'official',payouts:{straight:yen(sm?.[1]),box:yen(bm?.[1])}}}}return null}
+export async function fetchLatest(game:Game){const parsed=parseLatest(await fetchRaw(LATEST_URLS[game]),game);if(!parsed)throw new Error('公式最新結果を解析できませんでした');return parsed}
+function pageName(start:number){return `num${String(start).padStart(4,'0')}.html`}
+function parseBack(html:string){const text=clean(html);const out:{round:number;date:string;n3:string;n4:string}[]=[];const variants=[/第\s*(\d+)\s*回\s*(\d{4}年\d{1,2}月\d{1,2}日)\s*(\d{3})\s*(\d{4})/g,/第\s*(\d+)\s*回[\s\S]{0,80}?(\d{4}年\d{1,2}月\d{1,2}日)[\s\S]{0,80}?(\d{3})[\s\S]{0,80}?(\d{4})/g];for(const re of variants){let m:RegExpExecArray|null;while((m=re.exec(text)))out.push({round:Number(m[1]),date:m[2],n3:m[3],n4:m[4]});if(out.length)return out}return out}
+async function fetchBackPage(start:number){return parseBack(await fetchRaw(BACK_BASE+pageName(start)))}
+export async function fetchOfficialHistory(game:Game,limit=500):Promise<Draw[]>{const latest=await fetchLatest(game);const latestStart=Math.floor((latest.round-1)/20)*20+1;const starts:number[]=[];for(let s=latestStart;s>=1&&starts.length<Math.ceil(limit/20)+2;s-=20)starts.push(s);const map=new Map<number,Draw>();map.set(latest.round,latest);for(let i=0;i<starts.length;i+=4){const batch=await Promise.allSettled(starts.slice(i,i+4).map(fetchBackPage));for(const result of batch)if(result.status==='fulfilled')for(const row of result.value)map.set(row.round,{game,round:row.round,date:row.date,number:game==='numbers3'?row.n3:row.n4,source:'official'});}const rows=[...map.values()].sort((a,b)=>b.round-a.round).slice(0,limit);if(rows.length<60)throw new Error(`公式履歴が不足しています（${rows.length}回）`);return rows}
+export function nextDrawDate(japaneseDate:string){const m=japaneseDate.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);if(!m)return null;const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));do d.setUTCDate(d.getUTCDate()+1);while([0,6].includes(d.getUTCDay()));return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`}

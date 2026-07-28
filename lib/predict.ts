@@ -59,9 +59,9 @@ export function generate(game: Game, draws: Draw[], count=20, profile:WeightProf
     if(odd>0&&odd<len){raw+=profile.parity*30;reasons.push('奇数・偶数混合');}
     reasons.push(`${profile.name}重みで自動評価`);
     const score=Math.max(35,Math.min(96,Math.round(38+raw/(len*.72))));
-    const estimatedRate=Number((score/100*(count/(10**len))*100).toFixed(game==='numbers3'?3:4));
+    const relativeScore=score;
     const prev=candidates.get(number);
-    if(!prev||prev.score<score)candidates.set(number,{number,score,estimatedRate,reasons});
+    if(!prev||prev.score<score)candidates.set(number,{number,score,relativeScore,reasons});
   }
   return [...candidates.values()].sort((a,b)=>b.score-a.score||a.number.localeCompare(b.number)).slice(0,count);
 }
