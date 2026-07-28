@@ -29,7 +29,7 @@ async function fetchRaw(url: string, timeoutMs = 5500) {
   try {
     const response = await fetch(url, {
       headers: {
-        'user-agent': 'Mozilla/5.0 (compatible; NumbersOracle/6.5; +https://vercel.app)',
+        'user-agent': 'Mozilla/5.0 (compatible; NumbersOracle/7.0; +https://vercel.app)',
         accept: 'text/html,application/xhtml+xml',
         'accept-language': 'ja-JP,ja;q=0.9',
       },

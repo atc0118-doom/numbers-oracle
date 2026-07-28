@@ -10,8 +10,8 @@ const boxKey=(v:string)=>[...v].sort().join('');
 
 function quickScore(game:Game,draws:Draw[],profile:WeightProfile){
   let score=0,tested=0;
-  const limit=Math.min(36,draws.length-20);
-  for(let i=0;i<limit;i+=3){
+  const limit=Math.min(24,draws.length-20);
+  for(let i=0;i<limit;i+=4){
     const target=draws[i], training=draws.slice(i+1);
     const values=generate(game,training,10,profile).map(p=>p.number);
     if(values.includes(target.number)) score+=6;
@@ -24,12 +24,15 @@ function quickScore(game:Game,draws:Draw[],profile:WeightProfile){
 export function selectProfile(game:Game,draws:Draw[]):WeightProfile{
   return [...PROFILES].sort((a,b)=>quickScore(game,draws,b)-quickScore(game,draws,a))[0];
 }
-export function evaluateAccuracy(game:Game,draws:Draw[],picksPerDraw=20,profile=selectProfile(game,draws),testLimit=48):AccuracyStats{
+
+/** Fair walk-forward evaluation: profile selection is repeated using training data only. */
+export function evaluateAccuracy(game:Game,draws:Draw[],picksPerDraw=10,testLimit=12):AccuracyStats{
   let tested=0,straight=0,box=0,matched=0,total=0;
-  const maxTests=Math.min(testLimit,draws.length-24);
+  const maxTests=Math.min(testLimit,draws.length-30);
   for(let i=0;i<maxTests;i++){
     const target=draws[i],training=draws.slice(i+1);
-    if(training.length<24)continue;
+    if(training.length<30)continue;
+    const profile=selectProfile(game,training);
     const values=generate(game,training,picksPerDraw,profile).map(p=>p.number);
     tested++;
     if(values.includes(target.number))straight++;
@@ -38,5 +41,5 @@ export function evaluateAccuracy(game:Game,draws:Draw[],picksPerDraw=20,profile=
     total+=target.number.length;
   }
   const rate=(n:number)=>tested?Number((n/tested*100).toFixed(2)):0;
-  return {testedDraws:tested,picksPerDraw,straightHits:straight,boxHits:box,straightRate:rate(straight),boxRate:rate(box),digitMatchRate:total?Number((matched/total*100).toFixed(1)):0,dataQuality:draws.every(d=>d.source==='official')?'official':'reference',selectedProfile:profile.name,historySize:draws.length};
+  return {testedDraws:tested,picksPerDraw,straightHits:straight,boxHits:box,straightRate:rate(straight),boxRate:rate(box),digitMatchRate:total?Number((matched/total*100).toFixed(1)):0,dataQuality:draws.every(d=>d.source==='official')?'official':'reference',selectedProfile:'WALK-FORWARD SELECT',historySize:draws.length};
 }

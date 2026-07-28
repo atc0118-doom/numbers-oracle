@@ -1,4 +1,6 @@
 import type { Draw, Game, Prediction } from './types';
+import { generate } from './predict';
+import { selectProfile } from './accuracy';
 
 const softmax=(values:number[])=>{const max=Math.max(...values);const ex=values.map(v=>Math.exp(v-max));const sum=ex.reduce((a,b)=>a+b,0)||1;return ex.map(v=>v/sum)};
 const dot=(a:number[],b:number[])=>a.reduce((s,v,i)=>s+v*(b[i]??0),0);
@@ -71,18 +73,19 @@ export function generateAI(game:Game,draws:Draw[],count=10):{predictions:Predict
   return {predictions,trainingRows:rows,model:'MULTINOMIAL LOGISTIC'};
 }
 
-export function evaluateAI(game:Game,draws:Draw[],picks=10,maxTests=120){
+export function evaluateAI(game:Game,draws:Draw[],picks=10,maxTests=12){
   const boxKey=(v:string)=>[...v].sort().join('');
-  let tested=0,straight=0,box=0;
+  let tested=0,straight=0,box=0,matched=0,total=0;
   const limit=Math.min(maxTests,draws.length-50);
   for(let i=0;i<limit;i++){
     const target=draws[i],training=draws.slice(i+1);
     if(training.length<50)continue;
     const values=generateAI(game,training,picks).predictions.map(p=>p.number);
     tested++;if(values.includes(target.number))straight++;if(values.some(v=>boxKey(v)===boxKey(target.number)))box++;
+    matched+=values.reduce((best,v)=>Math.max(best,[...v].filter((c,j)=>c===target.number[j]).length),0);total+=target.number.length;
   }
   const rate=(n:number)=>tested?Number((n/tested*100).toFixed(2)):0;
-  return {testedDraws:tested,picksPerDraw:picks,straightHits:straight,boxHits:box,straightRate:rate(straight),boxRate:rate(box)};
+  return {testedDraws:tested,picksPerDraw:picks,straightHits:straight,boxHits:box,straightRate:rate(straight),boxRate:rate(box),digitMatchRate:total?Number((matched/total*100).toFixed(1)):0};
 }
 
 export function hybrid(stat:Prediction[],ai:Prediction[],count=10):Prediction[]{
@@ -92,26 +95,21 @@ export function hybrid(stat:Prediction[],ai:Prediction[],count=10):Prediction[]{
   return [...map.entries()].map(([number,v])=>{const combined=v.stat*.45+v.ai*.55;return {number,score:Math.round(35+combined*.6),relativeScore:Math.round(combined),reasons:[...v.reasons,'統計45% + AI55%']}}).sort((a,b)=>b.relativeScore-a.relativeScore).slice(0,count);
 }
 
-export function evaluateHybrid(game:Game,draws:Draw[],picks=10,maxTests=120){
+/** Hybrid backtest uses the same statistical profile selection + AI model as live prediction. */
+export function evaluateHybrid(game:Game,draws:Draw[],picks=10,maxTests=12){
   const boxKey=(v:string)=>[...v].sort().join('');
-  let tested=0,straight=0,box=0;
+  let tested=0,straight=0,box=0,matched=0,total=0;
   const limit=Math.min(maxTests,draws.length-60);
   for(let i=0;i<limit;i++){
     const target=draws[i],training=draws.slice(i+1);
     if(training.length<60)continue;
-    const stat=generateForHybrid(game,training,20);
+    const profile=selectProfile(game,training);
+    const stat=generate(game,training,20,profile);
     const ai=generateAI(game,training,20).predictions;
     const values=hybrid(stat,ai,picks).map(p=>p.number);
     tested++;if(values.includes(target.number))straight++;if(values.some(v=>boxKey(v)===boxKey(target.number)))box++;
+    matched+=values.reduce((best,v)=>Math.max(best,[...v].filter((c,j)=>c===target.number[j]).length),0);total+=target.number.length;
   }
   const rate=(n:number)=>tested?Number((n/tested*100).toFixed(2)):0;
-  return {testedDraws:tested,picksPerDraw:picks,straightHits:straight,boxHits:box,straightRate:rate(straight),boxRate:rate(box)};
-}
-
-function generateForHybrid(game:Game,draws:Draw[],count:number){
-  // Lazy require相当を避けるため、統計候補は軽量な桁頻度順位で構成。
-  const len=game==='numbers3'?3:4; const sample=draws.slice(0,180);
-  let beam:{number:string;score:number}[]=[{number:'',score:0}];
-  for(let pos=0;pos<len;pos++){const freq=Array(10).fill(0);sample.forEach(d=>freq[Number(d.number[pos])]++);const next=[] as typeof beam;for(const b of beam)for(let n=0;n<10;n++)next.push({number:b.number+n,score:b.score+freq[n]});beam=next.sort((a,b)=>b.score-a.score).slice(0,count*8)}
-  return beam.slice(0,count).map((b,i)=>({number:b.number,score:95-i,relativeScore:100-i,reasons:['統計頻度モデル']}));
+  return {testedDraws:tested,picksPerDraw:picks,straightHits:straight,boxHits:box,straightRate:rate(straight),boxRate:rate(box),digitMatchRate:total?Number((matched/total*100).toFixed(1)):0};
 }
