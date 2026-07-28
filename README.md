@@ -1,30 +1,19 @@
-# NUMBERS ORACLE V6 — HARDENED EDITION
+# NUMBERS ORACLE V6.2 — CACHED RUNTIME
 
-V5の弱点を修正した版です。
+V6.2はVercelの60秒タイムアウト対策版です。
 
-## 改善点
-- 公式HTML取得を3回リトライし、複数の解析パターンを使用
-- 一部バックナンバーページが失敗しても他ページで継続
-- 次回対象日を最新抽せん日から平日ベースで保存
-- AI・統計・ハイブリッドそれぞれ最大120回のウォークフォワード検証
-- 10口×200円の購入額を保存
-- 公式ページからストレート払戻金を取得できた回は回収額・ROIを記録
-- Supabase既存テーブルをV6へ更新できる移行SQL
+## 変更点
+- `/api/data` は外部サイトへアクセスせず、Supabaseの `oracle_cache` だけを読むため高速です。
+- 外部履歴取得・予想生成・バックテストはCron同期時だけ実行します。
+- Numbers3 / Numbers4 のCronを10分ずらして分離しました。
+- 履歴取得は楽天銀行の月別当せん番号案内を最大12ページ並列取得します。
+- AI/HybridバックテストはCron時間内に収めるため直近24回をウォークフォワード検証します。
+- 不要ファイル `lib/ai.ts.tmp`, `lib/vercel.json`, `next.config.ts`, `tsconfig.tsbuildinfo` を削除しました。
 
-## 注意
-対象日は土日を除外した推定日です。祝日や発売日程変更時は公式日程を優先してください。
-ROIは「表示された10口を全てストレートで各200円購入した」と仮定します。払戻金を公式ページから取得できない過去回はROIを表示しません。
+## 初回アップデート時
+1. Supabase SQL Editorで `supabase.sql` を実行（`oracle_cache`を追加）。
+2. GitHubをこの内容で上書き。
+3. VercelデプロイがReadyになったら、CronをNumbers3/Numbers4それぞれ一度実行。
+4. `oracle_cache` に2行できれば完了。
 
-## 必要な環境変数
-- `CRON_SECRET`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-## 導入
-1. Supabase SQL Editorで `supabase.sql` を実行
-2. GitHubの既存ファイルをV6で上書き
-3. Vercelに3つの環境変数を登録
-4. Redeploy
-5. Vercel CronをRunして初回予想を保存
-
-Cron: 平日21:15 JST (`15 12 * * 1-5`)
+環境変数は既存の `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` をそのまま使います。

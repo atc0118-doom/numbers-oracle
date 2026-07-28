@@ -1,120 +1,43 @@
-# NUMBERS ORACLE V6 導入手順
+# NUMBERS ORACLE V6.2 更新手順
 
-## 事前に用意するもの
-- GitHubアカウント
-- Vercelアカウント
-- Supabaseアカウント
-- このZIPを解凍できるPC
+## 1. Supabase
+既存プロジェクトの SQL Editor で `supabase.sql` を実行してください。
+V6.2で新しく `oracle_cache` テーブルが追加されます。既存の `forecasts` データは削除しません。
 
-## A. Supabaseを更新する
-1. Supabaseへログインします。
-2. V5で使っているプロジェクトを開きます。新規導入の場合は新しいProjectを作成します。
-3. 左メニューの **SQL Editor** を開きます。
-4. **New query** を押します。
-5. ZIP内の `supabase.sql` をメモ帳などで開き、全文をコピーします。
-6. SQL Editorへ貼り付けて **Run** を押します。
-7. `Success. No rows returned` と表示されれば完了です。
-8. 左メニューの **Table Editor → forecasts** を開き、次の列があることを確認します。
-   - target_date
-   - purchase_type
-   - stake_yen
-   - return_yen
-   - roi_percent
+成功後、Database > Tables に以下があればOKです。
+- forecasts
+- oracle_cache
 
-既存のV5データは削除しません。`add column if not exists` により不足列だけ追加します。
+## 2. GitHub
+このZIPの中身で現在のリポジトリを上書きしてください。
+旧ファイルは残さず、ZIPに存在しない不要ファイルも削除してください。
 
-## B. Supabaseの接続情報を確認する
-1. Supabaseの **Project Settings** を開きます。
-2. **API** または **Data API** を開きます。
-3. `Project URL` をコピーします。これが `SUPABASE_URL` です。
-4. API Keysから `service_role` のSecret Keyをコピーします。これが `SUPABASE_SERVICE_ROLE_KEY` です。
-5. service_roleキーは他人へ送らず、GitHubにも書き込まないでください。
+削除対象例:
+- lib/ai.ts.tmp
+- lib/vercel.json
+- next.config.ts
+- tsconfig.tsbuildinfo
+- lib/seed.ts（残っている場合）
 
-## C. CRON_SECRETを作る
-英数字を混ぜた長い文字列を自分で作ります。例の文字列をそのまま使わないでください。
+## 3. Vercel
+環境変数は既存のままです。
+- SUPABASE_URL
+- SUPABASE_SERVICE_ROLE_KEY
+- CRON_SECRET
 
-例：`oracle-v6-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+GitHubへコミットすると自動デプロイされます。StatusがReadyになることを確認してください。
 
-## D. GitHubをV6へ更新する
-1. ZIPを解凍します。
-2. GitHubで現在Vercelに接続しているリポジトリを開きます。
-3. V5のファイルをV6の同名ファイルで上書きします。
-4. 特に次がアップロードされていることを確認します。
-   - `app/`
-   - `lib/`
-   - `package.json`
-   - `tsconfig.json`
-   - `next.config.mjs`
-   - `vercel.json`
-   - `supabase.sql`
-5. `node_modules` はアップロードしません。
-6. Commit messageは `Upgrade to V6 hardened edition` などで構いません。
+## 4. 初回同期
+V6.2では画面を開いても外部データ取得を行いません。
+Cronが以下を実行してSupabaseへ計算済み結果を保存します。
+- /api/cron/numbers3
+- /api/cron/numbers4
 
-GitHubのWeb画面でフォルダ上書きが難しい場合は、既存ファイルを削除してからZIP内のファイルをまとめてドラッグしてください。
+設定時刻はUTC 12時台（日本時間21時台）です。
+初回Cron実行前は画面に「初回同期がまだです」と表示されます。
 
-## E. Vercel環境変数を登録する
-1. Vercelで対象Projectを開きます。
-2. **Settings → Environment Variables** を開きます。
-3. 以下を1件ずつ登録します。
+VercelのCron Jobs画面から手動実行できる場合は、Numbers3 / Numbers4を各1回実行してください。
 
-### SUPABASE_URL
-Value：SupabaseのProject URL
-
-### SUPABASE_SERVICE_ROLE_KEY
-Value：Supabaseのservice_role Secret Key
-
-### CRON_SECRET
-Value：自分で作成した長いランダム文字列
-
-4. Environmentは最低でも **Production** を選びます。Previewでも確認する場合はPreviewにも適用します。
-5. 保存後、必ず再デプロイします。環境変数は保存しただけでは過去のDeploymentへ反映されません。
-
-## F. 再デプロイする
-1. Vercelの **Deployments** を開きます。
-2.最新Deploymentのメニューから **Redeploy** を選びます。
-3. Build Logsでエラーがないか確認します。
-4. `Ready` になったら公開URLを開きます。
-
-## G. 動作確認
-### 予想API
-公開URLの末尾へ以下を付けます。
-`/api/data?game=numbers4`
-
-JSONが表示され、次を確認します。
-- `status: official`
-- `targetDate` が入っている
-- `accuracy.hybrid` がある
-- `predictions.hybrid` が10件ある
-
-### 画面
-トップページで以下を確認します。
-- `V6` 表示
-- NEXT TARGETの下に日付表示
-- HYBRID BACKTESTが独立表示
-- 公開実績に投資額・回収額・ROI欄がある
-
-## H. 初回Cronを実行する
-通常は平日21:15 JSTに自動実行されます。初回だけすぐ保存したい場合はVercelのCron画面からRunします。
-
-1. Vercel Projectの **Settings → Cron Jobs** またはCron一覧を開きます。
-2. `/api/cron` を選び **Run** を押します。
-3. Function Logsで `ok: true` を確認します。
-4. SupabaseのTable Editorで、Numbers3とNumbers4について3モデルずつ、合計6行が追加されたことを確認します。
-
-ブラウザで `/api/cron` を直接開くと、CRON_SECRET認証により401になる場合があります。これは正常です。
-
-## I. 翌抽せん後の確認
-次のCron実行後、前回の `pending` が `settled` へ変わります。
-- winning_number：当せん番号
-- straight_hit：ストレート一致
-- box_hit：並び替え一致
-- best_digit_match：同じ位置で一致した最大桁数
-- stake_yen：10口なら2,000円
-- return_yen：公式払戻金を取得できた場合の回収額
-- roi_percent：回収額が取得できた場合のみ計算
-
-## 注意事項
-- target_dateは土日を除外した推定日です。祝日や発売日変更までは自動判定しません。
-- ROIは10口すべてをストレートで各200円購入した仮定です。
-- 当せんを保証するものではありません。
-- 公式サイトの構造が大幅に変わった場合、取得処理の更新が必要です。
+## 5. 正常確認
+Supabase > Table Editor > oracle_cache に2行（numbers3 / numbers4）が入れば同期成功です。
+その後トップページを再読込すると、キャッシュ済み予想が数秒以内に表示されます。
