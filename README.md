@@ -1,4 +1,4 @@
-# NUMBERS ORACLE V7 — RANDOM BASELINE VERIFICATION
+# NUMBERS ORACLE V7.1 — RANDOM BASELINE VERIFICATION
 
 V7の目的は「AIが当たる」と主張することではなく、**AI / 統計 / HYBRID が完全なランダム基準より実際に優位かを、同じ条件で検証すること**です。
 
@@ -39,3 +39,7 @@ V6.5から更新する場合、GitHubへV7を上書きする前後にSupabase SQ
 ## 注意
 
 抽せんはランダム性が非常に高く、過去データから将来の当せんを保証するものではありません。V7の目的は予想モデルの優位性の有無を透明に検証することです。
+
+
+## V7.1 fix
+Supabase の新しい `sb_secret_...` API key は `apikey` ヘッダーだけで送信します。Legacy `service_role` JWT (`eyJ...`) の場合のみ Authorization Bearer を併用します。

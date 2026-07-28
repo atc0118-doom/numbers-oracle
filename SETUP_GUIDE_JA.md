@@ -1,4 +1,4 @@
-# NUMBERS ORACLE V7 更新手順（V6.5 → V7）
+# NUMBERS ORACLE V7.1 更新手順（V6.5 → V7）
 
 ## 1. Supabaseを先に更新
 
