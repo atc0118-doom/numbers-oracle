@@ -1,16 +1,30 @@
-# NUMBERS ORACLE V2
+# NUMBERS ORACLE V6 — HARDENED EDITION
 
-ナンバーズ3・4の統計予想Webアプリです。
+V5の弱点を修正した版です。
 
-## V2の追加内容
-- 次回候補を10口から20口へ拡張
-- 参照履歴を360回（N3）/420回（N4）へ拡張
-- 最大160回のウォークフォワード検証
-- BALANCED / FREQUENCY / OVERDUE / PAIR の4方式を直近検証し、自動選択
-- 候補ごとのORACLE INDEXとモデル内参考推定値
-- 公式最新結果の取得失敗時はFALLBACK表示
+## 改善点
+- 公式HTML取得を3回リトライし、複数の解析パターンを使用
+- 一部バックナンバーページが失敗しても他ページで継続
+- 次回対象日を最新抽せん日から平日ベースで保存
+- AI・統計・ハイブリッドそれぞれ最大120回のウォークフォワード検証
+- 10口×200円の購入額を保存
+- 公式ページからストレート払戻金を取得できた回は回収額・ROIを記録
+- Supabase既存テーブルをV6へ更新できる移行SQL
 
-## Vercel
-Framework PresetはNext.js、Root Directoryは空欄、Build/Install/Outputは自動設定のままデプロイしてください。
+## 注意
+対象日は土日を除外した推定日です。祝日や発売日程変更時は公式日程を優先してください。
+ROIは「表示された10口を全てストレートで各200円購入した」と仮定します。払戻金を公式ページから取得できない過去回はROIを表示しません。
 
-注意: REFERENCE履歴は公式全履歴ではありません。的中率・推定値は将来の当せんを保証しません。
+## 必要な環境変数
+- `CRON_SECRET`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## 導入
+1. Supabase SQL Editorで `supabase.sql` を実行
+2. GitHubの既存ファイルをV6で上書き
+3. Vercelに3つの環境変数を登録
+4. Redeploy
+5. Vercel CronをRunして初回予想を保存
+
+Cron: 平日21:15 JST (`15 12 * * 1-5`)
