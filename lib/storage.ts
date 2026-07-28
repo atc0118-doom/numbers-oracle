@@ -9,11 +9,11 @@ export type SavedForecast={
   best_digit_match?:number|null;status?:'pending'|'settled'
 };
 export type OracleCacheRow={game:Game;payload:any;updated_at?:string};
-function cfg(){const url=process.env.SUPABASE_URL?.replace(/\/$/,'')??'';const key=process.env.SUPABASE_SERVICE_ROLE_KEY??'';return{enabled:Boolean(url&&key),url,key}}
+function cfg(){const url=process.env.SUPABASE_URL?.replace(/\/$/,'')??'';const key=process.env.SUPABASE_SECRET_KEY??process.env.SUPABASE_SERVICE_ROLE_KEY??'';return{enabled:Boolean(url&&key),url,key}}
 export function persistenceEnabled(){return cfg().enabled}
 async function request<T>(path:string,init:RequestInit={}):Promise<T>{
   const c=cfg();if(!c.enabled)throw new Error('Supabase persistence is not configured');
-  const h=new Headers(init.headers);h.set('apikey',c.key);h.set('Authorization',`Bearer ${c.key}`);h.set('Content-Type','application/json');if(!h.has('Prefer'))h.set('Prefer','return=representation');
+  const h=new Headers(init.headers);h.set('apikey',c.key);if(c.key.startsWith('eyJ'))h.set('Authorization',`Bearer ${c.key}`);else h.delete('Authorization');h.set('Content-Type','application/json');if(!h.has('Prefer'))h.set('Prefer','return=representation');
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
   try{
     const r=await fetch(`${c.url}/rest/v1/${path}`,{...init,headers:h,cache:'no-store',signal:controller.signal});
