@@ -2,6 +2,65 @@ import type { Draw, Game } from './types';
 
 const RAKUTEN_BASE = 'https://takarakuji.rakuten.co.jp/backnumber/bank/';
 
+const SUUSEN_URL = 'https://www.suusen.net/';
+
+function parseIsoDate(value: string) {
+  const m = value.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  if (!m) return null;
+  return `${m[1]}-${String(Number(m[2])).padStart(2,'0')}-${String(Number(m[3])).padStart(2,'0')}`;
+}
+
+function formatJpDate(iso: string) {
+  const [y,m,d] = iso.split('-').map(Number);
+  return `${y}年${m}月${d}日`;
+}
+
+function weekdayNext(iso: string) {
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d));
+  do dt.setUTCDate(dt.getUTCDate()+1); while ([0,6].includes(dt.getUTCDay()));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+}
+
+function weekdayPrev(iso: string) {
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d));
+  do dt.setUTCDate(dt.getUTCDate()-1); while ([0,6].includes(dt.getUTCDay()));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+}
+
+function jstNow() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Tokyo', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hourCycle:'h23'
+  }).formatToParts(new Date());
+  const get=(t:string)=>parts.find(p=>p.type===t)?.value??'';
+  return {iso:`${get('year')}-${get('month')}-${get('day')}`, hour:Number(get('hour')), minute:Number(get('minute'))};
+}
+
+/** 現時点で結果が公開済みであるべき最終抽せん日。18:45〜19:29は公開反映待ちを許容する。 */
+export function expectedLatestDrawDate() {
+  const now=jstNow();
+  const [y,m,d]=now.iso.split('-').map(Number);
+  const day=new Date(Date.UTC(y,m-1,d)).getUTCDay();
+  if ([0,6].includes(day)) return weekdayPrev(now.iso);
+  const minutes=now.hour*60+now.minute;
+  if (minutes < 19*60+30) return weekdayPrev(now.iso);
+  return now.iso;
+}
+
+async function fetchPublicLatest(game: Game): Promise<Draw|null> {
+  try {
+    const text=clean(await fetchRaw(SUUSEN_URL,4500));
+    const digits=game==='numbers3'?3:4;
+    const label=game==='numbers3'?'ナンバーズ３':'ナンバーズ４';
+    const re=new RegExp(`${label}[\\s\\S]{0,120}?第(\\d+)回[（(](\\d{4})年(\\d{2})月(\\d{2})日[）)][\\s\\S]{0,120}?抽せん数字\\s*(\\d{${digits}})`);
+    const m=text.match(re);
+    if(!m) return null;
+    return {game,round:Number(m[1]),date:`${m[2]}年${Number(m[3])}月${Number(m[4])}日`,number:m[5],source:'public-fallback'};
+  } catch { return null; }
+}
+
 const decode = (v: string) => v
   .replace(/&nbsp;|&#160;/gi, ' ')
   .replace(/&amp;/gi, '&')
@@ -99,8 +158,15 @@ export async function fetchOfficialHistory(game: Game, limit = 160): Promise<Dra
     if (result.status !== 'fulfilled') continue;
     for (const row of result.value) map.set(row.round, row);
   }
+  const publicLatest = await fetchPublicLatest(game);
+  if (publicLatest && (!map.size || publicLatest.round > Math.max(...map.keys()))) map.set(publicLatest.round, publicLatest);
   const rows = [...map.values()].sort((a, b) => b.round - a.round).slice(0, limit);
   if (rows.length < 60) throw new Error(`公開当せん履歴が不足しています（${rows.length}回）`);
+  const latestIso=parseIsoDate(rows[0].date);
+  const expected=expectedLatestDrawDate();
+  if (!latestIso || latestIso < expected) {
+    throw new Error(`当せん結果ソース更新待ちです（最新 ${latestIso??'不明'} / 必要 ${expected}）`);
+  }
   return rows;
 }
 
@@ -110,9 +176,6 @@ export async function fetchLatest(game: Game) {
 }
 
 export function nextDrawDate(japaneseDate: string) {
-  const match = japaneseDate.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
-  if (!match) return null;
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  do date.setUTCDate(date.getUTCDate() + 1); while ([0, 6].includes(date.getUTCDay()));
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  const iso=parseIsoDate(japaneseDate);
+  return iso ? weekdayNext(iso) : null;
 }
