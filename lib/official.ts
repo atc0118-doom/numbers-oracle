@@ -1,7 +1,10 @@
 import type { Draw, Game } from './types';
 
 const RAKUTEN_BASE = 'https://takarakuji.rakuten.co.jp/backnumber/bank/';
-const MIZUHO_BASE = 'https://www.mizuhobank.co.jp/takarakuji/check/numbers';
+const LOTO_LIFE: Record<Game,string> = {
+  numbers3: 'https://loto-life.net/numbers3',
+  numbers4: 'https://loto-life.net/public/index.php/numbers4',
+};
 
 const decode = (v: string) => v
   .replace(/&nbsp;|&#160;/gi, ' ')
@@ -20,20 +23,20 @@ const clean = (html: string) => decode(
     .replace(/<[^>]+>/g, ' '),
 ).replace(/[ \t]+/g, ' ').replace(/\n+/g, '\n');
 
-async function fetchRaw(url: string, timeoutMs = 6500) {
+async function fetchRaw(url: string, timeoutMs = 5500) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       headers: {
-        'user-agent': 'Mozilla/5.0 (compatible; NumbersOracle/6.4; +https://vercel.app)',
+        'user-agent': 'Mozilla/5.0 (compatible; NumbersOracle/6.5; +https://vercel.app)',
         accept: 'text/html,application/xhtml+xml',
         'accept-language': 'ja-JP,ja;q=0.9',
       },
       cache: 'no-store',
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`${new URL(url).hostname} HTTP ${response.status}`);
     return await response.text();
   } finally {
     clearTimeout(timeout);
@@ -58,8 +61,29 @@ function weekdayNext(iso: string) {
   do dt.setUTCDate(dt.getUTCDate()+1); while ([0,6].includes(dt.getUTCDay()));
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
 }
+function weekdayPrev(iso: string) {
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y,m-1,d));
+  do dt.setUTCDate(dt.getUTCDate()-1); while ([0,6].includes(dt.getUTCDay()));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+}
+function jstNow() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+  }).formatToParts(new Date());
+  const get=(t:string)=>parts.find(p=>p.type===t)?.value??'';
+  return {iso:`${get('year')}-${get('month')}-${get('day')}`,hour:Number(get('hour')),minute:Number(get('minute'))};
+}
+/** 公式案内では数字選択式の最新結果は原則20:30すぎに照会可能。 */
+export function expectedLatestDrawDate() {
+  const now=jstNow();
+  const [y,m,d]=now.iso.split('-').map(Number);
+  const weekday=new Date(Date.UTC(y,m-1,d)).getUTCDay();
+  if([0,6].includes(weekday)) return weekdayPrev(now.iso);
+  if(now.hour*60+now.minute < 20*60+30) return weekdayPrev(now.iso);
+  return now.iso;
+}
 
-/** 楽天銀行の月別当せん番号ページを解析する。 */
 function parseRakuten(html: string, game: Game): Draw[] {
   const text = clean(html);
   const digits = game === 'numbers3' ? 3 : 4;
@@ -74,37 +98,27 @@ function parseRakuten(html: string, game: Game): Draw[] {
     const straight = payoutText.match(/ストレート\s*(?:[\d,，]+口\s*)?([\d,，]+)円/);
     const box = payoutText.match(/ボックス\s*(?:[\d,，]+口\s*)?([\d,，]+)円/);
     rows.push({
-      game,
-      round: Number(match[1]),
-      date: jpDate(match[2]),
-      number: match[3],
-      source: 'bank-fallback',
+      game, round: Number(match[1]), date: jpDate(match[2]), number: match[3], source: 'bank-fallback',
       payouts: { straight: yen(straight?.[1]), box: yen(box?.[1]) },
     });
   }
   return rows;
 }
 
-/** みずほ銀行「今月の当せん番号」から最新結果を1回だけ取得。 */
-async function fetchMizuhoLatest(game: Game): Promise<Draw | null> {
+/** 最新1回だけ補完。履歴学習は楽天銀行の掲載値を使用する。 */
+async function fetchPublicLatest(game: Game): Promise<Draw|null> {
   try {
-    const slug = game === 'numbers3' ? 'numbers3' : 'numbers4';
-    const digits = game === 'numbers3' ? 3 : 4;
-    const text = clean(await fetchRaw(`${MIZUHO_BASE}/${slug}/index.html`, 5000));
-    const re = new RegExp(`第(\\d+)回[\\s\\S]{0,160}?(\\d{4})年(\\d{1,2})月(\\d{1,2})日[\\s\\S]{0,180}?(?:抽せん数字|当せん番号)\\s*(\\d{${digits}})`, 'g');
-    const rows: Draw[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) {
-      rows.push({
-        game,
-        round: Number(m[1]),
-        date: `${m[2]}年${Number(m[3])}月${Number(m[4])}日`,
-        number: m[5],
-        source: 'bank-fallback',
-      });
-    }
-    return rows.sort((a,b) => b.round-a.round)[0] ?? null;
-  } catch {
+    const text=clean(await fetchRaw(LOTO_LIFE[game],4500));
+    const digits=game==='numbers3'?3:4;
+    const re=new RegExp(`回別\\s*第(\\d+)回[\\s\\S]{0,100}?抽選日\\s*(\\d{4})年(\\d{1,2})月(\\d{1,2})日[\\s\\S]{0,100}?当選番号\\s*(\\d{${digits}})[\\s\\S]{0,160}?ストレート\\s*(?:[\\d,，]+口\\s*)?([\\d,，]+)円[\\s\\S]{0,120}?ボックス\\s*(?:[\\d,，]+口\\s*)?([\\d,，]+)円`);
+    const m=text.match(re);
+    if(!m) return null;
+    return {
+      game,round:Number(m[1]),date:`${m[2]}年${Number(m[3])}月${Number(m[4])}日`,number:m[5],source:'public-fallback',
+      payouts:{straight:yen(m[6]),box:yen(m[7])}
+    };
+  } catch(e) {
+    console.warn('[oracle] latest supplement unavailable', game, e instanceof Error?e.message:String(e));
     return null;
   }
 }
@@ -119,38 +133,32 @@ function monthKeys(count: number) {
   return output;
 }
 
-/**
- * V6.4: 外部アクセスを固定5本までに削減。
- * みずほ最新1本 + 楽天直近4か月を並列取得し、suusen.net補完は廃止。
- */
 export async function fetchOfficialHistory(game: Game, limit = 70): Promise<Draw[]> {
   const slug = game === 'numbers3' ? 'numbers3' : 'numbers4';
   const months = monthKeys(4);
-  const [latestResult, ...historyResults] = await Promise.allSettled([
-    fetchMizuhoLatest(game),
+  const [latest, ...history] = await Promise.allSettled([
+    fetchPublicLatest(game),
     ...months.map(async ym => parseRakuten(await fetchRaw(`${RAKUTEN_BASE}${slug}/${ym}/`), game)),
   ]);
-
-  const map = new Map<number, Draw>();
-  for (const result of historyResults) {
-    if (result.status !== 'fulfilled') continue;
-    for (const row of result.value) map.set(row.round, row);
+  const map = new Map<number,Draw>();
+  for(const result of history){
+    if(result.status!=='fulfilled') continue;
+    for(const row of result.value) map.set(row.round,row);
   }
-  if (latestResult.status === 'fulfilled' && latestResult.value) {
-    map.set(latestResult.value.round, latestResult.value);
+  if(latest.status==='fulfilled' && latest.value){
+    const existing=map.get(latest.value.round);
+    map.set(latest.value.round,{...existing,...latest.value,payouts:latest.value.payouts??existing?.payouts});
   }
-
-  const rows = [...map.values()].sort((a, b) => b.round - a.round).slice(0, limit);
-  if (rows.length < 50) throw new Error(`公開当せん履歴が不足しています（${rows.length}回）`);
+  const rows=[...map.values()].sort((a,b)=>b.round-a.round).slice(0,limit);
+  if(rows.length<50) throw new Error(`HISTORY_SHORT:${rows.length}`);
+  const latestIso=parseIsoDate(rows[0].date);
+  const expected=expectedLatestDrawDate();
+  if(!latestIso || latestIso<expected) throw new Error(`SOURCE_STALE:${latestIso??'unknown'}:${expected}`);
   return rows;
 }
 
-export async function fetchLatest(game: Game) {
-  const rows = await fetchOfficialHistory(game, 30);
-  return rows[0];
-}
-
+export async function fetchLatest(game: Game) { return (await fetchOfficialHistory(game,30))[0]; }
 export function nextDrawDate(japaneseDate: string) {
-  const iso = parseIsoDate(japaneseDate);
-  return iso ? weekdayNext(iso) : null;
+  const iso=parseIsoDate(japaneseDate);
+  return iso?weekdayNext(iso):null;
 }
