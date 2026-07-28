@@ -24,9 +24,9 @@ function quickScore(game:Game,draws:Draw[],profile:WeightProfile){
 export function selectProfile(game:Game,draws:Draw[]):WeightProfile{
   return [...PROFILES].sort((a,b)=>quickScore(game,draws,b)-quickScore(game,draws,a))[0];
 }
-export function evaluateAccuracy(game:Game,draws:Draw[],picksPerDraw=20,profile=selectProfile(game,draws)):AccuracyStats{
+export function evaluateAccuracy(game:Game,draws:Draw[],picksPerDraw=20,profile=selectProfile(game,draws),testLimit=48):AccuracyStats{
   let tested=0,straight=0,box=0,matched=0,total=0;
-  const maxTests=Math.min(160,draws.length-24);
+  const maxTests=Math.min(testLimit,draws.length-24);
   for(let i=0;i<maxTests;i++){
     const target=draws[i],training=draws.slice(i+1);
     if(training.length<24)continue;
