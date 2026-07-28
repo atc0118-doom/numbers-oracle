@@ -1,27 +1,25 @@
 # NUMBERS ORACLE
 
-ナンバーズ3・4の公式最新結果を取得し、桁別頻度・空白期間・数字構成を使って次回候補を自動生成するNext.jsアプリです。
+ナンバーズ3・4の最新結果取得、候補生成、バックテスト的中率表示を行うNext.jsアプリです。
 
-## 導入
-1. このフォルダをGitHubの新規リポジトリへアップロード
-2. Vercelで「Add New Project」→リポジトリを選択→Deploy
-3. VercelのEnvironment Variablesに `CRON_SECRET` を登録
-4. 平日21:15（日本時間。UTC 12:15）に `/api/cron` が自動実行
+## Vercel公開手順
 
-## ローカル起動
-```bash
-npm install
-npm run dev
-```
+1. このZIPを解凍する
+2. ZIP直下の全ファイルをGitHubリポジトリ最上位へアップロードする
+3. VercelでそのリポジトリをImportする
+4. Framework Presetは `Next.js`、Root Directoryは空欄のままDeployする
+5. 必要に応じて環境変数 `CRON_SECRET` を設定する
+
+独自のBuild Command、Output Directory、Install Commandは設定しないでください。Vercelの自動判定を使用します。
+
+## 修正内容
+
+- Vercelが安全上ブロックする可能性のある古いNext.js 15.2.4を15.5.21へ更新
+- `next.config.ts` を互換性の高い `next.config.mjs` に変更
+- React DOMの型定義を追加
+- API RouteをNode.js Runtimeへ固定
+- 公式サイト取得に8秒タイムアウトを追加
 
 ## 注意
-- 購入機能はありません。
-- 予想指数は相対評価で、的中確率や当せんを保証しません。
-- 公式サイト側のHTML変更時には取得ロジックの調整が必要です。
-- Vercel HobbyプランのCronは実行時刻に幅が出る場合があります。
 
-## 的中率表示
-- 各対象回より前の履歴だけを使って候補を再生成するウォークフォワード方式です。
-- 上位10口のストレート的中率、ボックス的中率、最良候補の桁一致率を表示します。
-- 初期シードデータを含む間は `REFERENCE` 表示です。公式履歴だけで検証できる状態になると `OFFICIAL` 表示になります。
-- ORACLE INDEXは候補間の相対スコアであり、実際の当せん確率ではありません。
+表示される的中率は過去データによるバックテスト参考値で、将来の当せんを保証しません。
