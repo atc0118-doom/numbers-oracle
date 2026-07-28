@@ -1,8 +1,8 @@
-# NUMBERS ORACLE V6.2 更新手順
+# NUMBERS ORACLE V6.4 更新手順
 
 ## 1. Supabase
 既存プロジェクトの SQL Editor で `supabase.sql` を実行してください。
-V6.2で新しく `oracle_cache` テーブルが追加されます。既存の `forecasts` データは削除しません。
+V6.4で新しく `oracle_cache` テーブルが追加されます。既存の `forecasts` データは削除しません。
 
 成功後、Database > Tables に以下があればOKです。
 - forecasts
@@ -28,7 +28,7 @@ V6.2で新しく `oracle_cache` テーブルが追加されます。既存の `f
 GitHubへコミットすると自動デプロイされます。StatusがReadyになることを確認してください。
 
 ## 4. 初回同期
-V6.2では画面を開いても外部データ取得を行いません。
+V6.4では画面を開いても外部データ取得を行いません。
 Cronが以下を実行してSupabaseへ計算済み結果を保存します。
 - /api/cron/numbers3
 - /api/cron/numbers4

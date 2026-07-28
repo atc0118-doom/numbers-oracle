@@ -1,10 +1,10 @@
-# NUMBERS ORACLE V6.3
+# NUMBERS ORACLE V6.4
 
-V6.2のキャッシュ構成を維持しつつ、最新結果ソースの更新遅延でNEXT TARGETが過去日付になる問題を修正。楽天銀行の月別履歴を主データとし、最新1回のみ公開速報で補完可能。JST基準で結果が古い場合は誤った予想を保存せず更新待ちにする。
+V6.4のキャッシュ構成を維持しつつ、最新結果ソースの更新遅延でNEXT TARGETが過去日付になる問題を修正。楽天銀行の月別履歴を主データとし、最新1回のみ公開速報で補完可能。JST基準で結果が古い場合は誤った予想を保存せず更新待ちにする。
 
-# NUMBERS ORACLE V6.2 — CACHED RUNTIME
+# NUMBERS ORACLE V6.4 — CACHED RUNTIME
 
-V6.2はVercelの60秒タイムアウト対策版です。
+V6.4はVercelの60秒タイムアウト対策版です。
 
 ## 変更点
 - `/api/data` は外部サイトへアクセスせず、Supabaseの `oracle_cache` だけを読むため高速です。
