@@ -7,7 +7,7 @@ import { persistenceEnabled, saveForecast, saveOracleCache, settleForecasts } fr
 
 export async function syncGame(game:Game){
   if(!persistenceEnabled()) throw new Error('Supabase環境変数が未設定です');
-  const draws=await fetchOfficialHistory(game,160);
+  const draws=await fetchOfficialHistory(game,70);
   const settlement=await settleForecasts(draws);
   const profile=selectProfile(game,draws);
   const statistical=generate(game,draws,10,profile);
@@ -24,7 +24,7 @@ export async function syncGame(game:Game){
   // 重いバックテストは同期時だけ実行。閲覧APIでは再計算しない。
   const payload={
     game,
-    status:draws[0].source==='public-fallback'?'public-verified':'bank-verified',
+    status:'bank-verified',
     latest:draws[0],
     targetRound,
     targetDate,
@@ -35,7 +35,7 @@ export async function syncGame(game:Game){
       hybrid:evaluateHybrid(game,draws,10,18),
     },
     aiInfo:{model:aiResult.model,trainingRows:aiResult.trainingRows,features:'桁別頻度・未出間隔・直前数字・合計・奇偶・重複度'},
-    sourceInfo:{primary:draws[0].source==='public-fallback'?'楽天銀行履歴 + 公開速報補完':'楽天銀行 当せん番号案内',historySize:draws.length,latestSource:draws[0].source},
+    sourceInfo:{primary:'みずほ銀行 最新結果 + 楽天銀行 履歴',historySize:draws.length,latestSource:draws[0].source},
     updatedAt:new Date().toISOString(),
     notice:'AI SCOREとRELATIVE SCOREは候補間の順位評価です。バックテスト成績と公開後の実運用成績は別集計で、当せんを保証しません。',
   };
