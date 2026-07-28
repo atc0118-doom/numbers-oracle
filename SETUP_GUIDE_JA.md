@@ -1,43 +1,50 @@
-# NUMBERS ORACLE V6.4 更新手順
+# NUMBERS ORACLE V7 更新手順（V6.5 → V7）
 
-## 1. Supabase
-既存プロジェクトの SQL Editor で `supabase.sql` を実行してください。
-V6.4で新しく `oracle_cache` テーブルが追加されます。既存の `forecasts` データは削除しません。
+## 1. Supabaseを先に更新
 
-成功後、Database > Tables に以下があればOKです。
-- forecasts
-- oracle_cache
+Supabase → SQL Editor → New query を開き、`supabase-v7-migration.sql` の全文を貼ってRunします。
 
-## 2. GitHub
-このZIPの中身で現在のリポジトリを上書きしてください。
-旧ファイルは残さず、ZIPに存在しない不要ファイルも削除してください。
+成功後、`forecasts`テーブルに `model_version` 列が追加されます。既存データには `LEGACY` が入ります。既存実績は削除されません。
 
-削除対象例:
-- lib/ai.ts.tmp
-- lib/vercel.json
-- next.config.ts
-- tsconfig.tsbuildinfo
-- lib/seed.ts（残っている場合）
+V7では `model` に `random` が追加されます。また一意制約は `game + target_round + model + model_version` に変わるため、将来アルゴリズムを変更しても旧モデル予想を上書きしません。
+
+## 2. GitHubをV7で上書き
+
+ZIP内のファイルを現在のnumbers-oracleリポジトリへ上書きします。
+
+V7では不要になった `app/api/cron/route.ts` は削除しています。Cronは次の2本だけです。
+
+- `/api/cron/numbers3`
+- `/api/cron/numbers4`
 
 ## 3. Vercel
-環境変数は既存のままです。
-- SUPABASE_URL
-- SUPABASE_SERVICE_ROLE_KEY
-- CRON_SECRET
 
-GitHubへコミットすると自動デプロイされます。StatusがReadyになることを確認してください。
+環境変数は変更不要です。GitHubのコミット後、自動デプロイが `Ready` になるまで待ちます。
 
-## 4. 初回同期
-V6.4では画面を開いても外部データ取得を行いません。
-Cronが以下を実行してSupabaseへ計算済み結果を保存します。
-- /api/cron/numbers3
-- /api/cron/numbers4
+## 4. 初回V7同期
 
-設定時刻はUTC 12時台（日本時間21時台）です。
-初回Cron実行前は画面に「初回同期がまだです」と表示されます。
+Vercel → Settings → Cron Jobs からNumbers3とNumbers4を各1回Runします。
 
-VercelのCron Jobs画面から手動実行できる場合は、Numbers3 / Numbers4を各1回実行してください。
+V7のCron成功後、Supabase `forecasts` には次回について4モデルが保存されます。
 
-## 5. 正常確認
-Supabase > Table Editor > oracle_cache に2行（numbers3 / numbers4）が入れば同期成功です。
-その後トップページを再読込すると、キャッシュ済み予想が数秒以内に表示されます。
+- statistical
+- ai
+- hybrid
+- random
+
+## 5. サイト確認
+
+「予想・比較」で4モデルが表示され、4-MODEL BACKTEST BENCHMARKにRANDOMが出れば成功です。
+
+「公開実績」の `LIVE HEAD-TO-HEAD vs RANDOM` は、V7予想の対象回が実際に抽せん・照合されてから数字が入り始めます。過去のV6.5成績をRANDOMとの比較へ無理に混ぜません。
+
+## 6. エラー時
+
+Cronが500の場合はVercel Runtime Logsを確認します。V6.5同様、V7もstageログを出します。
+
+- `stage=history`
+- `stage=settle`
+- `stage=predict`
+- `stage=forecast`
+- `stage=backtest`
+- `stage=cache`

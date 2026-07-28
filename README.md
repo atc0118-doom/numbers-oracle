@@ -1,23 +1,41 @@
-# NUMBERS ORACLE V6.4
+# NUMBERS ORACLE V7 — RANDOM BASELINE VERIFICATION
 
-V6.4のキャッシュ構成を維持しつつ、最新結果ソースの更新遅延でNEXT TARGETが過去日付になる問題を修正。楽天銀行の月別履歴を主データとし、最新1回のみ公開速報で補完可能。JST基準で結果が古い場合は誤った予想を保存せず更新待ちにする。
+V7の目的は「AIが当たる」と主張することではなく、**AI / 統計 / HYBRID が完全なランダム基準より実際に優位かを、同じ条件で検証すること**です。
 
-# NUMBERS ORACLE V6.4 — CACHED RUNTIME
+## V7の4モデル
 
-V6.4はVercelの60秒タイムアウト対策版です。
+- `STATISTICAL` — 統計モデル。バックテストでは各検証時点の過去データだけで重みを選び直します。
+- `AI` — 多クラスロジスティック回帰。
+- `HYBRID` — 統計45% + AI55%。バックテストも実運用と同じ構成です。
+- `RANDOM` — 当せん履歴を使わず、対象回だけを種にした再現可能な擬似乱数10口。比較基準です。
 
-## 変更点
-- `/api/data` は外部サイトへアクセスせず、Supabaseの `oracle_cache` だけを読むため高速です。
-- 外部履歴取得・予想生成・バックテストはCron同期時だけ実行します。
-- Numbers3 / Numbers4 のCronを10分ずらして分離しました。
-- 履歴取得は楽天銀行の月別当せん番号案内を最大12ページ並列取得します。
-- AI/HybridバックテストはCron時間内に収めるため直近24回をウォークフォワード検証します。
-- 不要ファイル `lib/ai.ts.tmp`, `lib/vercel.json`, `next.config.ts`, `tsconfig.tsbuildinfo` を削除しました。
+## モデルバージョン
 
-## 初回アップデート時
-1. Supabase SQL Editorで `supabase.sql` を実行（`oracle_cache`を追加）。
-2. GitHubをこの内容で上書き。
-3. VercelデプロイがReadyになったら、CronをNumbers3/Numbers4それぞれ一度実行。
-4. `oracle_cache` に2行できれば完了。
+V7から各予想に`model_version`を保存します。アルゴリズムを将来変更しても旧モデルの成績と混ぜません。
 
-環境変数は既存の `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` をそのまま使います。
+- `STAT-7.0-WF`
+- `AI-7.0-LOGREG`
+- `HYBRID-7.0-45_55`
+- `RANDOM-7.0-SEEDED`
+
+## 公平な比較
+
+バックテストは4モデルとも同じ対象回、同じ10口で比較します。ただし短いバックテストの差は偶然で簡単に変動します。V7の主評価は、抽せん前にSupabaseへ保存された**公開後実績のpaired comparison**です。
+
+公開実績では、同じ対象回に存在するV7モデルとRANDOMだけをペアにして平均桁一致、ストレート差、BOX差を比較します。
+
+## 更新時に必要なこと
+
+V6.5から更新する場合、GitHubへV7を上書きする前後にSupabase SQL Editorで `supabase-v7-migration.sql` を一度実行してください。
+
+環境変数はV6.5と同じです。
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `CRON_SECRET`
+
+その後VercelがReadyになったらNumbers3 / Numbers4のCronを各1回Runしてください。
+
+## 注意
+
+抽せんはランダム性が非常に高く、過去データから将来の当せんを保証するものではありません。V7の目的は予想モデルの優位性の有無を透明に検証することです。
