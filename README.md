@@ -1,25 +1,16 @@
-# NUMBERS ORACLE
+# NUMBERS ORACLE V2
 
-ナンバーズ3・4の最新結果取得、候補生成、バックテスト的中率表示を行うNext.jsアプリです。
+ナンバーズ3・4の統計予想Webアプリです。
 
-## Vercel公開手順
+## V2の追加内容
+- 次回候補を10口から20口へ拡張
+- 参照履歴を360回（N3）/420回（N4）へ拡張
+- 最大160回のウォークフォワード検証
+- BALANCED / FREQUENCY / OVERDUE / PAIR の4方式を直近検証し、自動選択
+- 候補ごとのORACLE INDEXとモデル内参考推定値
+- 公式最新結果の取得失敗時はFALLBACK表示
 
-1. このZIPを解凍する
-2. ZIP直下の全ファイルをGitHubリポジトリ最上位へアップロードする
-3. VercelでそのリポジトリをImportする
-4. Framework Presetは `Next.js`、Root Directoryは空欄のままDeployする
-5. 必要に応じて環境変数 `CRON_SECRET` を設定する
+## Vercel
+Framework PresetはNext.js、Root Directoryは空欄、Build/Install/Outputは自動設定のままデプロイしてください。
 
-独自のBuild Command、Output Directory、Install Commandは設定しないでください。Vercelの自動判定を使用します。
-
-## 修正内容
-
-- Vercelが安全上ブロックする可能性のある古いNext.js 15.2.4を15.5.21へ更新
-- `next.config.ts` を互換性の高い `next.config.mjs` に変更
-- React DOMの型定義を追加
-- API RouteをNode.js Runtimeへ固定
-- 公式サイト取得に8秒タイムアウトを追加
-
-## 注意
-
-表示される的中率は過去データによるバックテスト参考値で、将来の当せんを保証しません。
+注意: REFERENCE履歴は公式全履歴ではありません。的中率・推定値は将来の当せんを保証しません。
