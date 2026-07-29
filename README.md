@@ -43,3 +43,17 @@ V6.5から更新する場合、GitHubへV7を上書きする前後にSupabase SQ
 
 ## V7.1 fix
 Supabase の新しい `sb_secret_...` API key は `apikey` ヘッダーだけで送信します。Legacy `service_role` JWT (`eyJ...`) の場合のみ Authorization Bearer を併用します。
+
+## V7.2 変更点（コードレビュー対応）
+
+環境変数・Supabaseスキーマの変更はありません。上書きしてそのままデプロイできます。
+
+- **可読性リファクタ**：`predict.ts` / `ai.ts` / `official.ts` / `sync.ts` / `accuracy.ts` / `random.ts` / `storage.ts` を1行詰め込みスタイルから展開し、マジックナンバーに名前を付けました。計算ロジック自体は変更していません（結果は同じになるはずです）。
+- **祝日対応**：`expectedLatestDrawDate` / `nextDrawDate` が土日に加えて日本の祝日（holidays-jpデータセット）を考慮するようになりました。祝日APIが取得できない場合は従来の土日のみ判定に自動フォールバックします。
+- **バックテスト件数を緩和**：`MAX_BACKTEST_ROUNDS` を8→16に。既に取得済みの履歴を使い回すだけなのでスクレイピング量は増えません。
+- **`dataQuality`判定のバグ修正**：`draws.every(d=>d.source==='official')` が常にfalseになっていた（`Draw.source`は実際には`bank-fallback`/`public-fallback`/`cache`のいずれかしか入らない）ため、常に`reference`表示になっていました。正しい値と比較するよう修正しました。UI上では現状未使用ですが、今後使う場合のために直しています。
+- **`any`型の除去**：`OracleCacheRow.payload`（および`saveOracleCache`の引数）が`any`だったのを`OracleCachePayload`という具体的な型に置き換えました。
+
+### 未解決のトレードオフ（意図的に変更していません）
+
+- **スクレイピング先への依存**：楽天銀行・loto-life.netの正規表現HTMLパースは変わっていません。取得月数を増やせばバックテストのサンプルを増やせますが、その分スクレイピング負荷も増えるトレードオフがあるため、今回は取得月数を増やさず、既存データの再利用（バックテスト件数緩和）だけに留めています。中長期的な解決策は、Supabase側に取得済みの回号を蓄積して差分だけ取得する設計です。
