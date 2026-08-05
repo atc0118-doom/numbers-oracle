@@ -47,6 +47,47 @@ export function generateRandom(game: Game, targetRound: number, count = 10): Pre
   }));
 }
 
+export const RANDOM_SELECTION_VARIANTS = ['ALPHA', 'BRAVO', 'CHARLIE', 'DELTA'] as const;
+export type RandomVariant = (typeof RANDOM_SELECTION_VARIANTS)[number];
+
+/**
+ * Same as generateRandom, but seeds on an extra `variant` salt. Still never
+ * uses draw history to build the numbers — only the label changes the seed.
+ *
+ * This exists purely as a bias-control tool: STATISTICAL/HYBRID pick the
+ * best-scoring of 4 weight profiles after looking at recent history
+ * (selectProfile in accuracy.ts). Any selection-among-N-options process adds
+ * an apparent edge even with zero real signal, just from picking the winner
+ * in hindsight. To measure how big that effect is on its own, accuracy.ts
+ * puts these 4 plain-random variants through the identical best-of-4
+ * selection process (selectRandomVariant / evaluateSelectionBias) and
+ * compares the result to plain RANDOM. Whatever "lift" shows up there is
+ * pure selection bias, not skill — and should be subtracted from
+ * STATISTICAL/HYBRID's apparent lift before treating it as evidence.
+ */
+export function generateRandomVariant(
+  game: Game,
+  targetRound: number,
+  variant: RandomVariant,
+  count = 10,
+): Prediction[] {
+  const digitCount = game === 'numbers3' ? 3 : 4;
+  const maxValue = 10 ** digitCount;
+  const random = createSeededRandom(hashString(`NUMBERS_ORACLE_RANDOM_7:${game}:${targetRound}:${variant}`));
+
+  const chosenNumbers = new Set<number>();
+  while (chosenNumbers.size < Math.min(count, maxValue)) {
+    chosenNumbers.add(Math.floor(random() * maxValue));
+  }
+
+  return [...chosenNumbers].map((n, index) => ({
+    number: String(n).padStart(digitCount, '0'),
+    score: BASELINE_SCORE,
+    relativeScore: 100 - index,
+    reasons: ['RANDOM BASELINE', `selection-bias control variant ${variant}`],
+  }));
+}
+
 const boxKey = (value: string) => [...value].sort().join('');
 
 /** Backtests the RANDOM baseline the same way the other models are backtested, for apples-to-apples comparison. */

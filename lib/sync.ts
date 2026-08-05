@@ -1,7 +1,7 @@
 import type { Game, OracleCachePayload } from './types';
 import { fetchOfficialHistory, nextDrawDate } from './official';
 import { generate } from './predict';
-import { evaluateAccuracy, selectProfile } from './accuracy';
+import { evaluateAccuracy, evaluateSelectionBias, selectProfile } from './accuracy';
 import { evaluateAI, evaluateHybrid, generateAI, hybrid } from './ai';
 import { evaluateRandom, generateRandom } from './random';
 import { MODEL_VERSIONS, type ModelMode } from './models';
@@ -81,12 +81,28 @@ export async function syncGame(game: Game) {
     hybrid: evaluateHybrid(game, draws, PICKS_PER_MODEL, benchmarkTests),
     random: evaluateRandom(game, draws, PICKS_PER_MODEL, benchmarkTests),
   };
+  // Bias-control baseline: run the *same* "pick best of 4 after looking at
+  // recent history" mechanism used by selectProfile(), but on plain random
+  // numbers with zero real signal (see random.ts generateRandomVariant /
+  // accuracy.ts evaluateSelectionBias). Any apparent edge this shows over
+  // plain RANDOM is pure hindsight-selection bias, not skill, and should be
+  // subtracted from STATISTICAL/HYBRID's raw lift before treating it as
+  // evidence of anything. AI doesn't use profile selection, so it's not
+  // adjusted.
+  const selectionBias = evaluateSelectionBias(game, draws, PICKS_PER_MODEL, benchmarkTests);
+
   const randomDigitMatchRate = accuracy.random.digitMatchRate || 0;
+  const selectionBiasLift = Number((selectionBias.digitMatchRate - randomDigitMatchRate).toFixed(1));
+  const statisticalLift = Number((accuracy.statistical.digitMatchRate - randomDigitMatchRate).toFixed(1));
+  const hybridLift = Number((accuracy.hybrid.digitMatchRate - randomDigitMatchRate).toFixed(1));
   const benchmark = {
-    statisticalLift: Number((accuracy.statistical.digitMatchRate - randomDigitMatchRate).toFixed(1)),
+    statisticalLift,
     aiLift: Number((accuracy.ai.digitMatchRate - randomDigitMatchRate).toFixed(1)),
-    hybridLift: Number((accuracy.hybrid.digitMatchRate - randomDigitMatchRate).toFixed(1)),
-    note: '同じ対象回・同じ10口条件でRANDOM BASELINEとの差を比較。短期差は偶然の可能性が高く、公開後実績を優先して評価します。',
+    hybridLift,
+    selectionBiasLift,
+    statisticalLiftAdjusted: Number((statisticalLift - selectionBiasLift).toFixed(1)),
+    hybridLiftAdjusted: Number((hybridLift - selectionBiasLift).toFixed(1)),
+    note: '同じ対象回・同じ10口条件でRANDOM BASELINEとの差を比較。短期差は偶然の可能性が高く、公開後実績を優先して評価します。STATISTICAL/HYBRIDは4つの重みプロファイルから直近成績が良いものを都度選び直すため、選択バイアス（RANDOM側でも同じ「4択から選ぶ」処理をした場合に生じる見かけの上乗せ）を差し引いた調整後リフトも参考にしてください。',
   };
 
   const payload: OracleCachePayload = {

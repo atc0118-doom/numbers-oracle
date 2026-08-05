@@ -50,7 +50,16 @@ export type OracleCachePayload = {
   targetDate: string | null;
   predictions: Record<ModelMode, Prediction[]>;
   accuracy: Record<'statistical', AccuracyStats> & Record<Exclude<ModelMode, 'statistical'>, BacktestResult>;
-  benchmark: { statisticalLift: number; aiLift: number; hybridLift: number; note: string };
+  benchmark: {
+    statisticalLift: number;
+    aiLift: number;
+    hybridLift: number;
+    /** Estimated lift from the "pick the best of 4 options after the fact" mechanism alone (see accuracy.ts evaluateSelectionBias), measured with zero-signal random variants. Applies to STATISTICAL/HYBRID, which both use selectProfile; AI doesn't select among profiles, so it has no bias to subtract. */
+    selectionBiasLift: number;
+    statisticalLiftAdjusted: number;
+    hybridLiftAdjusted: number;
+    note: string;
+  };
   modelVersions: Record<ModelMode, string>;
   aiInfo: { model: string; trainingRows: number; features: string };
   sourceInfo: { primary: string; historySize: number; latestSource?: Draw['source'] };
